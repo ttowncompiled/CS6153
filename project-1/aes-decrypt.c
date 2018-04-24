@@ -151,14 +151,14 @@ void addRoundKey(unsigned char** state, unsigned char** key) {
 }
 
 void decrypt(unsigned char** state, unsigned char** key, int length, int rounds) {
-    int idx = length-4;
+    int idx = length - 4;
     addRoundKey(state, key + idx);
-    idx = idx-4;
+    idx = idx - 4;
     for (int i = 0; i < rounds; i++) {
         invShiftRows(state);
         invSubBytes(state);
         addRoundKey(state, key + idx);
-        idx = idx-4;
+        idx = idx - 4;
         invMixColumns(state);
     }
     invShiftRows(state);
