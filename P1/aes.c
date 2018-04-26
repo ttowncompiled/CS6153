@@ -17,7 +17,7 @@ unsigned char** keyExpansion(unsigned char key[], int Nk, int Nr);
 void subWord(unsigned char word[4]);
 void rotWord(unsigned char word[4]);
 
-void addRoundKey(unsigned char** state, unsigned char** key);
+void addRoundKey(unsigned char** state, unsigned char** key, int offset);
 
 void subBytes(unsigned char** state);
 void invSubBytes(unsigned char** state);
@@ -228,19 +228,18 @@ unsigned char GMul14[256] = {
  * @return expKey - the key schedule.
 */
 unsigned char** keyExpansion(unsigned char key[], int Nk, int Nr) {
-    unsigned char** expKey = malloc(4*(Nr+1)*sizeof(char*));
-    for (int i = 0; i < 4*(Nr+1); i++) {
-        expKey[i] = malloc(4*sizeof(char));
+    unsigned char** expKey = malloc(4*sizeof(char*));
+    for (int i = 0; i < 4; i++) {
+        expKey[i] = malloc(4*(Nr+1)*sizeof(char));
     }
-    int k;
-    for (k = 0; k < Nk; k++) {
+    for (int k = 0; k < Nk; k++) {
         expKey[0][k] = key[4*k];
         expKey[1][k] = key[4*k+1];
         expKey[2][k] = key[4*k+2];
         expKey[3][k] = key[4*k+3];
     }
     unsigned char word[4];
-    for (k = Nk; k < 4*(Nr+1); k++) {
+    for (int k = Nk; k < 4*(Nr+1); k++) {
         word[0] = expKey[0][k-1];
         word[1] = expKey[1][k-1];
         word[2] = expKey[2][k-1];
@@ -248,7 +247,7 @@ unsigned char** keyExpansion(unsigned char key[], int Nk, int Nr) {
         if (k % Nk == 0) {
             rotWord(word);
             subWord(word);
-            word[3] = word[3] ^ rcon[k/Nk];
+            word[0] = word[0] ^ rcon[k/Nk];
         } else if (Nk > 6 && k % Nk == 4) {
             subWord(word);
         }
@@ -288,10 +287,10 @@ void rotWord(unsigned char word[4]) {
  * @param state - a 16-byte block of the plaintext or ciphertext.
  * @param key - a 16-byte slice of the encryption or decryption key.
 */
-void addRoundKey(unsigned char** state, unsigned char** key) {
+void addRoundKey(unsigned char** state, unsigned char** key, int offset) {
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
-            state[i][j] = state[i][j] ^ key[i][j];
+            state[j][i] = state[j][i] ^ key[j][offset+i];
         }
     }
 }
@@ -303,7 +302,7 @@ void addRoundKey(unsigned char** state, unsigned char** key) {
 void subBytes(unsigned char** state) {
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
-            state[i][j] = s[state[i][j]];
+            state[j][i] = s[state[j][i]];
         }
     }
 }
@@ -315,8 +314,7 @@ void subBytes(unsigned char** state) {
 void invSubBytes(unsigned char** state) {
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
-            state[i][j] = invS[state[i][j]];
-            
+            state[j][i] = invS[state[j][i]];
         }
     }
 }
@@ -433,16 +431,16 @@ void invMixColumns(unsigned char** state) {
  * @param rounds - the number of rounds to apply the encryption algorithm. Either 10, 12, or 14.
 */
 void aesEncrypt(unsigned char** state, unsigned char** key, int rounds) {
-    addRoundKey(state, key);
+    addRoundKey(state, key, 0);
     for (int i = 1; i < rounds; i++) {
         subBytes(state);
         shiftRows(state);
         mixColumns(state);
-        addRoundKey(state, key + 4*i);
+        addRoundKey(state, key, 4*i);
     }
     subBytes(state);
     shiftRows(state);
-    addRoundKey(state, key + 4*rounds);
+    addRoundKey(state, key, 4*rounds);
 }
 
 /*
@@ -452,16 +450,16 @@ void aesEncrypt(unsigned char** state, unsigned char** key, int rounds) {
  * @param rounds - the number of rounds to apply the encryption algorithm. Either 10, 12, or 14.
 */
 void aesDecrypt(unsigned char** state, unsigned char** key, int rounds) {
-    addRoundKey(state, key + 4*rounds);
+    addRoundKey(state, key, 4*rounds);
     for (int i = 1; i < rounds; i++) {
         invShiftRows(state);
         invSubBytes(state);
-        addRoundKey(state, key + 4*(rounds-i));
+        addRoundKey(state, key, 4*(rounds-i));
         invMixColumns(state);
     }
     invShiftRows(state);
     invSubBytes(state);
-    addRoundKey(state, key);
+    addRoundKey(state, key, 0);
 }
 
 // API
@@ -528,7 +526,7 @@ unsigned char* encrypt(unsigned char key[], unsigned char plaintext[]) {
             }
         }
     }
-    for (int i = 0; i < 4*(rounds+1); i++) {
+    for (int i = 0; i < 4; i++) {
         free(expKey[i]);
     }
     free(expKey);
@@ -600,7 +598,7 @@ unsigned char* decrypt(unsigned char key[], unsigned char ciphertext[]) {
             }
         }
     }
-    for (int i = 0; i < 4*(rounds+1); i++) {
+    for (int i = 0; i < 4; i++) {
         free(expKey[i]);
     }
     free(expKey);
